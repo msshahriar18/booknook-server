@@ -28,6 +28,29 @@ const borrowCollection = db.collection("borrows");
 
 const LOAN_DAYS = 7;
 
+const verifyToken = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ msg: "Unauthorized!" });
+  }
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).send({ msg: "Unauthorized!" });
+  }
+
+  const JWKS = createRemoteJWKSet(
+    new URL(`${process.env.CLIENT_URL}/api/auth/jwks`),
+  );
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+    req.decoded = payload;
+    next();
+  } catch (error) {
+    return res.status(401).send({ msg: "Invalid token!" });
+  }
+};
+
 app.get("/", (req, res) => {
   res.send({ message: "BookNook server is running fine!" });
 });
