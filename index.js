@@ -51,6 +51,73 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
+// public, also used by home (?limit=6) and my books (?email=)
+app.get("/books", async (req, res) => {
+  const { limit, email, category } = req.query;
+
+  const query = {};
+  if (email) query.addedByEmail = email;
+  if (category && category !== "All") query.category = category;
+
+  const cursor = bookCollection.find(query).sort({ createdAt: -1 });
+  if (limit) cursor.limit(Number(limit));
+
+  const result = await cursor.toArray();
+  res.send(result);
+});
+
+app.get("/books/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const result = await bookCollection.findOne({ _id: new ObjectId(id) });
+  res.send(result);
+});
+
+app.post("/books", verifyToken, async (req, res) => {
+  const data = req.body;
+  const result = await bookCollection.insertOne({
+    ...data,
+    totalCopies: Number(data.totalCopies),
+    availableCopies: Number(data.totalCopies),
+    createdAt: new Date(),
+  });
+  res.send(result);
+});
+
+app.patch("/books/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const { _id, availableCopies, createdAt, ...data } = req.body;
+
+  const book = await bookCollection.findOne({ _id: new ObjectId(id) });
+  const borrowed = book.totalCopies - book.availableCopies;
+  const total = Number(data.totalCopies);
+
+  if (total < borrowed) {
+    return res
+      .status(400)
+      .send({ msg: `${borrowed} copies are still out on loan.` });
+  }
+
+  const result = await bookCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { ...data, totalCopies: total, availableCopies: total - borrowed } },
+  );
+  res.json(result);
+});
+
+app.delete("/books/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+
+  const book = await bookCollection.findOne({ _id: new ObjectId(id) });
+  if (book.totalCopies !== book.availableCopies) {
+    return res
+      .status(400)
+      .send({ msg: "This book is borrowed right now, so it cannot be deleted." });
+  }
+
+  const result = await bookCollection.deleteOne({ _id: new ObjectId(id) });
+  res.json(result);
+});
+
 app.get("/", (req, res) => {
   res.send({ message: "BookNook server is running fine!" });
 });
