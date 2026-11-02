@@ -118,6 +118,72 @@ app.delete("/books/:id", verifyToken, async (req, res) => {
   res.json(result);
 });
 
+app.post("/borrows", verifyToken, async (req, res) => {
+  const { bookId } = req.body;
+  const email = req.decoded.email;
+
+  const book = await bookCollection.findOne({ _id: new ObjectId(bookId) });
+  if (!book || book.availableCopies < 1) {
+    return res.status(400).send({ msg: "No copy is available right now." });
+  }
+
+  const already = await borrowCollection.findOne({ bookId, email });
+  if (already) {
+    return res
+      .status(400)
+      .send({ msg: "You already have this book. Return it first." });
+  }
+
+  const borrowDate = new Date();
+  const returnDate = new Date(borrowDate);
+  returnDate.setDate(returnDate.getDate() + LOAN_DAYS);
+
+  await bookCollection.updateOne(
+    { _id: new ObjectId(bookId) },
+    { $inc: { availableCopies: -1 } },
+  );
+
+  const result = await borrowCollection.insertOne({
+    bookId,
+    title: book.title,
+    author: book.author,
+    imageUrl: book.imageUrl,
+    email,
+    name: req.decoded.name,
+    borrowDate,
+    returnDate,
+  });
+
+  res.send(result);
+});
+
+app.get("/borrows", verifyToken, async (req, res) => {
+  const email = req.decoded.email;
+  const result = await borrowCollection
+    .find({ email })
+    .sort({ borrowDate: -1 })
+    .toArray();
+  res.send(result);
+});
+
+app.delete("/borrows/:id", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const email = req.decoded.email;
+
+  const borrow = await borrowCollection.findOne({ _id: new ObjectId(id) });
+  if (!borrow || borrow.email !== email) {
+    return res.status(404).send({ msg: "Borrow record not found." });
+  }
+
+  await bookCollection.updateOne(
+    { _id: new ObjectId(borrow.bookId) },
+    { $inc: { availableCopies: 1 } },
+  );
+
+  const result = await borrowCollection.deleteOne({ _id: new ObjectId(id) });
+  res.send(result);
+});
+
 app.get("/", (req, res) => {
   res.send({ message: "BookNook server is running fine!" });
 });
