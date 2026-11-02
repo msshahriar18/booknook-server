@@ -85,35 +85,16 @@ app.post("/books", verifyToken, async (req, res) => {
 
 app.patch("/books/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const { _id, availableCopies, createdAt, ...data } = req.body;
-
-  const book = await bookCollection.findOne({ _id: new ObjectId(id) });
-  const borrowed = book.totalCopies - book.availableCopies;
-  const total = Number(data.totalCopies);
-
-  if (total < borrowed) {
-    return res
-      .status(400)
-      .send({ msg: `${borrowed} copies are still out on loan.` });
-  }
-
+  const { _id, ...data } = req.body;
   const result = await bookCollection.updateOne(
     { _id: new ObjectId(id) },
-    { $set: { ...data, totalCopies: total, availableCopies: total - borrowed } },
+    { $set: data },
   );
   res.json(result);
 });
 
 app.delete("/books/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-
-  const book = await bookCollection.findOne({ _id: new ObjectId(id) });
-  if (book.totalCopies !== book.availableCopies) {
-    return res
-      .status(400)
-      .send({ msg: "This book is borrowed right now, so it cannot be deleted." });
-  }
-
   const result = await bookCollection.deleteOne({ _id: new ObjectId(id) });
   res.json(result);
 });
