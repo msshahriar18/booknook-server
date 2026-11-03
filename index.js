@@ -87,15 +87,24 @@ app.patch("/books/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
   const { _id, ...data } = req.body;
   const result = await bookCollection.updateOne(
-    { _id: new ObjectId(id) },
+    { _id: new ObjectId(id), addedByEmail: req.decoded.email },
     { $set: data },
   );
+  if (!result.matchedCount) {
+    return res.status(403).send({ msg: "This is not your book." });
+  }
   res.json(result);
 });
 
 app.delete("/books/:id", verifyToken, async (req, res) => {
   const { id } = req.params;
-  const result = await bookCollection.deleteOne({ _id: new ObjectId(id) });
+  const result = await bookCollection.deleteOne({
+    _id: new ObjectId(id),
+    addedByEmail: req.decoded.email,
+  });
+  if (!result.deletedCount) {
+    return res.status(403).send({ msg: "This is not your book." });
+  }
   res.json(result);
 });
 
